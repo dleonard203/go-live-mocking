@@ -36,3 +36,29 @@ func TestAdd(t *testing.T) {
 		})
 	}
 }
+
+func TestMultiply(t *testing.T) {
+	testCases := []struct {
+		name     string
+		nums     []int
+		expected int
+	}{
+		{
+			name:     "empty set multiplies to 0",
+			nums:     []int{},
+			expected: 0,
+		},
+		{
+			name:     "all positive numbers",
+			nums:     []int{1, 2, 3},
+			expected: 6,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := Multiply(tc.nums...)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
