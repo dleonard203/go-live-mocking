@@ -11,7 +11,10 @@ func Add(nums ...int) int {
 
 // Multiply returns the product of nums
 func Multiply(nums ...int) int {
-	total := 0
+	if len(nums) == 0 {
+		return 0
+	}
+	total := 1
 	for _, num := range nums {
 		total *= num
 	}
