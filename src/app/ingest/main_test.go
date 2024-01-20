@@ -8,27 +8,10 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/dleonard203/go-live-mocking/src/domain"
+	"github.com/dleonard203/go-live-mocking/src/domain/mocks"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
-
-type s3Mock struct {
-	getObjectBytes []byte
-	getObjectErr   error
-}
-
-// GetObjectContents mock
-func (s *s3Mock) GetObjectContents(bucket, path string) ([]byte, error) {
-	return s.getObjectBytes, s.getObjectErr
-}
-
-type dbMock struct {
-	writeHumdityErr error
-}
-
-// WriteHumidityReadings mock
-func (d *dbMock) WriteHumidityReadings(readings []domain.HumidityStats) error {
-	return d.writeHumdityErr
-}
 
 func getMockS3Event(numRecords int) events.S3Event {
 	toReturn := events.S3Event{}
@@ -79,12 +62,14 @@ func TestPerformIngest(t *testing.T) {
 		getObjectBytes     []byte
 		getObjectErr       error
 		writeHumidityError error
+		hasJSONErr         bool
 		shouldError        bool
 	}{
 		{
 			name:           "unexpected data shape fails",
 			s3Event:        getMockS3Event(1),
 			getObjectBytes: invalidHumidityBytes,
+			hasJSONErr:     true,
 			shouldError:    true,
 		},
 
@@ -110,12 +95,20 @@ func TestPerformIngest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			s3Reader := &s3Mock{
-				getObjectBytes: tc.getObjectBytes,
-				getObjectErr:   tc.getObjectErr,
-			}
-			dbWriter := &dbMock{
-				writeHumdityErr: tc.writeHumidityError,
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			s3Reader := mocks.NewMockIS3Reader(ctrl)
+			dbWriter := mocks.NewMockISensorIngetsor(ctrl)
+
+			s3Reader.EXPECT().GetObjectContents(
+				tc.s3Event.Records[0].S3.Bucket.Name,
+				tc.s3Event.Records[0].S3.Object.Key,
+			).Times(1).Return(tc.getObjectBytes, tc.getObjectErr)
+
+			// db write only gets called if we get a successful s3 read for a valid payload
+			if tc.getObjectErr == nil && !tc.hasJSONErr {
+				dbWriter.EXPECT().WriteHumidityReadings(gomock.Any()).Times(1).Return(tc.writeHumidityError)
 			}
 
 			processor := NewS3SensorProcessor(s3Reader, dbWriter)
